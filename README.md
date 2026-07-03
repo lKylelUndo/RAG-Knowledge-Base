@@ -1,66 +1,71 @@
-Project Structure
+📚 Blog RAG (Retrieval-Augmented Generation) Flow
+📁 Project Structure
 server/
-│
-├── src
-│
-├── controllers
-│      blog.controller.ts
-│      ai.controller.ts
-│
-├── services
-│      blog/
-│           create.blog.service.ts
-│
-│      ai/
-│           chat.blog.service.ts
-│
-├── repositories
-│      blog.repository.ts
-│
-├── lib
-│      gemini
-│          embedding.ts
-│          chunk.ts
-│          retrieve.ts
-│
-├── routes
-│      blog.routes.ts
-│      ai.routes.ts
-STEP 1 — User Creates a Blog
+└── src/
+    ├── controllers/
+    │   ├── blog.controller.ts
+    │   └── ai.controller.ts
+    │
+    ├── services/
+    │   ├── blog/
+    │   │   ├── create.blog.service.ts
+    │   │   └── index.blog.service.ts
+    │   │
+    │   └── ai/
+    │       └── chat.blog.service.ts
+    │
+    ├── repositories/
+    │   └── blog.repository.ts
+    │
+    ├── lib/
+    │   └── gemini/
+    │       ├── chunk.ts
+    │       ├── embedding.ts
+    │       ├── retrieve.ts
+    │       └── prompt.ts
+    │
+    └── routes/
+        ├── blog.routes.ts
+        └── ai.routes.ts
+Phase 1 — Building the Knowledge Base
 
-Next.js
+This process happens only once whenever an administrator creates or updates a blog.
 
+Admin
+   │
+   ▼
+Create Blog
+   │
+   ▼
+Save Blog
+   │
+   ▼
+Chunk Blog Content
+   │
+   ▼
+Generate Embeddings
+   │
+   ▼
+Store Chunks + Embeddings
+Step 1 — Create Blog
+Next.js Request
 POST /api/blog
-
-Body
-
+Request Body
 {
-    "title":"Understanding React Hooks",
-    "content":"React Hooks allow..."
+  "title": "Understanding React Hooks",
+  "content": "React Hooks allow functional components..."
 }
-
-↓
-
-Express Route
-
-router.post("/blog", blogController.create)
-STEP 2 — Controller
-export async function create(req,res){
-
-    const response =
-        await createBlogService(req.body);
-
-    res.json(response);
-
+Step 2 — Express Route
+router.post("/blog", blogController.create);
+Step 3 — Controller
+export async function create(req, res) {
+    const response = await createBlogService(req.body);
+    return res.json(response);
 }
+Step 4 — Service
+export async function createBlogService(data) {
 
-Nothing special.
-
-STEP 3 — Service
-export async function createBlogService(data){
-
-    const blog =
-        await blogRepository.create(data);
+    const blog = await blogRepository.create(data);
 
     await indexBlog(blog);
 
@@ -68,354 +73,235 @@ export async function createBlogService(data){
 
 }
 
-Notice
-
-Saving
-
-and
-
-Indexing
-
-are separate.
+Notice that the service has two responsibilities:
 
 Save Blog
-
-↓
-
+      │
+      ▼
 Index Blog
-STEP 4 — Repository
+Step 5 — Repository
 await prisma.blog.create({
-
-data:{
-
-title,
-
-content
-
-}
-
+    data: {
+        title,
+        content
+    }
 });
+Database Result
+id	title	content
+blog-1	Understanding React Hooks	Full blog content
+Phase 2 — Indexing the Blog
 
-Returns
+After saving the blog, the content is converted into searchable knowledge.
 
-{
-    "id":"blog-1",
-    "title":"Understanding React Hooks",
-    "content":"React Hooks..."
-}
-STEP 5 — Index Blog
-
-This is where RAG begins.
-
-indexBlog(blog)
-export async function indexBlog(blog){
-
-    const chunks =
-        chunkText(blog.content);
-
-    ...
-}
-
-Input
-
-React Hooks...
-
-useState...
-
-useEffect...
-
-useMemo...
-STEP 6 — chunkText()
+Step 6 — Split Blog into Chunks
+const chunks = chunkText(blog.content);
+Function
 export function chunkText(
+    text: string,
+    size = 1000,
+    overlap = 200
+) {
+    const chunks = [];
 
-text:string,
+    let start = 0;
 
-size=1000,
+    while (start < text.length) {
 
-overlap=200
+        const end = Math.min(start + size, text.length);
 
-){
+        chunks.push(text.slice(start, end));
 
-const chunks=[];
+        start += size - overlap;
+    }
 
-let start=0;
-
-while(start<text.length){
-
-const end=Math.min(
-
-start+size,
-
-text.length
-
-);
-
-chunks.push(
-
-text.slice(start,end)
-
-);
-
-start+=size-overlap;
-
+    return chunks;
 }
-
-return chunks;
-
-}
-
 Output
-
 [
-"React Hooks allow...",
-
-"useState is...",
-
-"useEffect is...",
-
-"useMemo..."
+  "React Hooks allow functional components...",
+  "useState manages component state...",
+  "useEffect handles side effects...",
+  "useMemo optimizes expensive calculations..."
 ]
-STEP 7 — Generate Embedding
+Step 7 — Generate Embeddings
 
-Loop
+For every chunk:
 
-for(const chunk of chunks){
-
-const embedding=
-
-await generateEmbedding(chunk);
-
+for (const chunk of chunks) {
+    const embedding = await generateEmbedding(chunk);
 }
-
 Function
+export async function generateEmbedding(text: string) {
 
-export async function generateEmbedding(text:string){
+    const result = await genAI.models.embedContent({
+        model: "gemini-embedding-001",
+        contents: text
+    });
 
-const result=
-
-await genAI.models.embedContent({
-
-model:"gemini-embedding-001",
-
-contents:text
-
-});
-
-return result.embeddings[0].values;
-
+    return result.embeddings[0].values;
 }
-
-Input
-
-useEffect is used...
-
 Output
-
 [
-0.122,
-
-0.884,
-
-...
-
-768 values
+  0.124,
+  -0.552,
+  0.772,
+  ...
 ]
-STEP 8 — Save Chunk
 
-Loop
+(768-dimensional vector)
 
-for(
+Step 8 — Save Chunks
+for (let i = 0; i < chunks.length; i++) {
 
-let i=0;
+    const embedding = await generateEmbedding(chunks[i]);
 
-i<chunks.length;
-
-i++
-
-){
-
-const embedding=
-
-await generateEmbedding(
-
-chunks[i]
-
-);
-
-await prisma.blogChunk.create({
-
-data:{
-
-blogId:blog.id,
-
-chunkIndex:i,
-
-content:chunks[i],
-
-embedding
+    await prisma.blogChunk.create({
+        data: {
+            blogId: blog.id,
+            chunkIndex: i,
+            content: chunks[i],
+            embedding
+        }
+    });
 
 }
+BlogChunk Table
+Chunk Index	Content	Embedding
+0	React Hooks...	Vector
+1	useState...	Vector
+2	useEffect...	Vector
+3	useMemo...	Vector
 
-});
+The knowledge base is now ready.
 
-}
-
-Database
-
-BlogChunk
-
-chunk	embedding
-React Hooks	768 values
-useState	768 values
-useEffect	768 values
-useMemo	768 values
-
-Done.
-
-Knowledge Base ready.
-
-User asks chatbot
-
-Next.js
-
+Phase 3 — User Asks the Chatbot
+Visitor
+   │
+   ▼
+Ask Question
+   │
+   ▼
+Generate Question Embedding
+   │
+   ▼
+Vector Similarity Search
+   │
+   ▼
+Retrieve Top Chunks
+   │
+   ▼
+Build Context
+   │
+   ▼
+Gemini Generates Answer
+Step 9 — User Request
 POST /chat
-
-Body
-
+Request
 {
-
-"question":
-
-"What blogs mention useEffect?"
-
+  "question": "How does useEffect work?"
 }
-Controller
-chatController.ask()
-
-↓
-
-Service
-
-chatBlogService(question)
-STEP 9 — Embed Question
-const questionEmbedding=
-
-await generateEmbedding(
-
-question
-
-);
-
-Input
-
-How does useEffect work?
+Step 10 — Generate Question Embedding
+const questionEmbedding = await generateEmbedding(question);
 
 Output
 
 [
-0.341,
-
-0.664,
-
-...
-
-768
+  0.412,
+  0.123,
+  ...
 ]
-STEP 10 — Retrieve Similar Chunks
-const chunks=
-
-await retrieveChunks(
-
-questionEmbedding
-
-);
-
+Step 11 — Retrieve Similar Chunks
+const chunks = await retrieveChunks(questionEmbedding);
 Function
-
 export async function retrieveChunks(
+    embedding: number[]
+) {
 
-embedding:number[]
-
-){
-
-return prisma.$queryRaw`
-
-SELECT *
-
-FROM "BlogChunk"
-
-ORDER BY embedding <=> ${embedding}
-
-LIMIT 5
-
-`;
+    return prisma.$queryRaw`
+        SELECT *
+        FROM "BlogChunk"
+        ORDER BY embedding <=> ${embedding}
+        LIMIT 5
+    `;
 
 }
-
-Output
-
+Retrieved Chunks
 [
-{
-
-"content":"useEffect is used for side effects"
-
-},
-
-{
-
-"content":"React Hooks allow..."
-
-}
+  {
+    "content": "useEffect is used for side effects."
+  },
+  {
+    "content": "React Hooks allow functional components."
+  }
 ]
-STEP 11 — Build Context
-const context=
+Step 12 — Build Context
+const context = chunks
+    .map(chunk => chunk.content)
+    .join("\n\n");
 
-chunks
-
-.map(
-
-chunk=>chunk.content
-
-)
-
-.join("\n\n");
-
-Output
+Generated Context
 
 useEffect is used for side effects.
 
-React Hooks allow functional components...
-STEP 12 — Gemini
-const prompt=`
+React Hooks allow functional components.
+Step 13 — Ask Gemini
+const prompt = `
+Answer ONLY using the provided context.
 
-Answer ONLY using the context.
-
-Context
-
+Context:
 ${context}
 
-Question
-
+Question:
 ${question}
-
 `;
 
-Call Gemini
-
-const result=
-
-await genAI.models.generateContent({
-
-model:
-
-"gemini-2.5-flash",
-
-contents:prompt
-
+const result = await genAI.models.generateContent({
+    model: "gemini-2.5-flash",
+    contents: prompt
 });
+Gemini Response
+useEffect is a React Hook used for executing side effects after rendering, such as fetching data, subscriptions, and timers.
+Complete RAG Pipeline
+                 INDEXING PHASE (One-Time)
 
-Gemini returns
+Admin
+   │
+   ▼
+Create Blog
+   │
+   ▼
+Save Blog
+   │
+   ▼
+Chunk Blog
+   │
+   ▼
+Generate Embeddings
+   │
+   ▼
+Store Chunks + Embeddings
 
-useEffect is used to execute side effects after rendering such as fetching data, timers, and subscriptions.
 
-Return to frontend.
+                 RETRIEVAL PHASE (Every Chat)
+
+Visitor Question
+      │
+      ▼
+Generate Question Embedding
+      │
+      ▼
+Vector Similarity Search
+      │
+      ▼
+Retrieve Top 5 Chunks
+      │
+      ▼
+Build Context
+      │
+      ▼
+Gemini Generates Grounded Answer
+      │
+      ▼
+Return Response
+
+This format is much more suitable for a README because it clearly separates the Indexing Phase (building the knowledge base) from the Retrieval Phase (answering user questions), making the RAG workflow easy for reviewers or your thesis panel to understand.
