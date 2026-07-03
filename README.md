@@ -1,5 +1,10 @@
-📚 Blog RAG (Retrieval-Augmented Generation) Flow
-📁 Project Structure
+# 📚 Blog RAG (Retrieval-Augmented Generation) Flow
+
+---
+
+## 📁 Project Structure
+
+```
 server/
 └── src/
     ├── controllers/
@@ -27,10 +32,15 @@ server/
     └── routes/
         ├── blog.routes.ts
         └── ai.routes.ts
-Phase 1 — Building the Knowledge Base
+```
 
-This process happens only once whenever an administrator creates or updates a blog.
+---
 
+## Phase 1 — Building the Knowledge Base
+
+> This process happens only once whenever an administrator creates or updates a blog.
+
+```
 Admin
    │
    ▼
@@ -47,22 +57,51 @@ Generate Embeddings
    │
    ▼
 Store Chunks + Embeddings
-Step 1 — Create Blog
-Next.js Request
+```
+
+---
+
+### Step 1 — Create Blog
+
+**Next.js Request**
+
+```
 POST /api/blog
-Request Body
+```
+
+**Request Body**
+
+```json
 {
   "title": "Understanding React Hooks",
   "content": "React Hooks allow functional components..."
 }
-Step 2 — Express Route
+```
+
+---
+
+### Step 2 — Express Route
+
+```ts
 router.post("/blog", blogController.create);
-Step 3 — Controller
+```
+
+---
+
+### Step 3 — Controller
+
+```ts
 export async function create(req, res) {
     const response = await createBlogService(req.body);
     return res.json(response);
 }
-Step 4 — Service
+```
+
+---
+
+### Step 4 — Service
+
+```ts
 export async function createBlogService(data) {
 
     const blog = await blogRepository.create(data);
@@ -72,30 +111,53 @@ export async function createBlogService(data) {
     return blog;
 
 }
+```
 
-Notice that the service has two responsibilities:
+> Notice that the service has two responsibilities:
 
+```
 Save Blog
       │
       ▼
 Index Blog
-Step 5 — Repository
+```
+
+---
+
+### Step 5 — Repository
+
+```ts
 await prisma.blog.create({
     data: {
         title,
         content
     }
 });
-Database Result
-id	title	content
-blog-1	Understanding React Hooks	Full blog content
-Phase 2 — Indexing the Blog
+```
 
-After saving the blog, the content is converted into searchable knowledge.
+**Database Result**
 
-Step 6 — Split Blog into Chunks
+| id     | title                     | content           |
+|--------|---------------------------|-------------------|
+| blog-1 | Understanding React Hooks | Full blog content |
+
+---
+
+## Phase 2 — Indexing the Blog
+
+> After saving the blog, the content is converted into searchable knowledge.
+
+---
+
+### Step 6 — Split Blog into Chunks
+
+```ts
 const chunks = chunkText(blog.content);
-Function
+```
+
+**Function**
+
+```ts
 export function chunkText(
     text: string,
     size = 1000,
@@ -116,21 +178,34 @@ export function chunkText(
 
     return chunks;
 }
-Output
+```
+
+**Output**
+
+```json
 [
   "React Hooks allow functional components...",
   "useState manages component state...",
   "useEffect handles side effects...",
   "useMemo optimizes expensive calculations..."
 ]
-Step 7 — Generate Embeddings
+```
 
-For every chunk:
+---
 
+### Step 7 — Generate Embeddings
+
+> For every chunk:
+
+```ts
 for (const chunk of chunks) {
     const embedding = await generateEmbedding(chunk);
 }
-Function
+```
+
+**Function**
+
+```ts
 export async function generateEmbedding(text: string) {
 
     const result = await genAI.models.embedContent({
@@ -140,17 +215,26 @@ export async function generateEmbedding(text: string) {
 
     return result.embeddings[0].values;
 }
-Output
+```
+
+**Output**
+
+```json
 [
   0.124,
   -0.552,
   0.772,
   ...
 ]
+```
 
-(768-dimensional vector)
+> (768-dimensional vector)
 
-Step 8 — Save Chunks
+---
+
+### Step 8 — Save Chunks
+
+```ts
 for (let i = 0; i < chunks.length; i++) {
 
     const embedding = await generateEmbedding(chunks[i]);
@@ -165,16 +249,24 @@ for (let i = 0; i < chunks.length; i++) {
     });
 
 }
-BlogChunk Table
-Chunk Index	Content	Embedding
-0	React Hooks...	Vector
-1	useState...	Vector
-2	useEffect...	Vector
-3	useMemo...	Vector
+```
 
-The knowledge base is now ready.
+**BlogChunk Table**
 
-Phase 3 — User Asks the Chatbot
+| Chunk Index | Content        | Embedding |
+|-------------|----------------|-----------|
+| 0           | React Hooks... | Vector    |
+| 1           | useState...    | Vector    |
+| 2           | useEffect...   | Vector    |
+| 3           | useMemo...     | Vector    |
+
+> ✅ The knowledge base is now ready.
+
+---
+
+## Phase 3 — User Asks the Chatbot
+
+```
 Visitor
    │
    ▼
@@ -194,25 +286,53 @@ Build Context
    │
    ▼
 Gemini Generates Answer
-Step 9 — User Request
+```
+
+---
+
+### Step 9 — User Request
+
+```
 POST /chat
-Request
+```
+
+**Request**
+
+```json
 {
   "question": "How does useEffect work?"
 }
-Step 10 — Generate Question Embedding
+```
+
+---
+
+### Step 10 — Generate Question Embedding
+
+```ts
 const questionEmbedding = await generateEmbedding(question);
+```
 
-Output
+**Output**
 
+```json
 [
   0.412,
   0.123,
   ...
 ]
-Step 11 — Retrieve Similar Chunks
+```
+
+---
+
+### Step 11 — Retrieve Similar Chunks
+
+```ts
 const chunks = await retrieveChunks(questionEmbedding);
-Function
+```
+
+**Function**
+
+```ts
 export async function retrieveChunks(
     embedding: number[]
 ) {
@@ -225,7 +345,11 @@ export async function retrieveChunks(
     `;
 
 }
-Retrieved Chunks
+```
+
+**Retrieved Chunks**
+
+```json
 [
   {
     "content": "useEffect is used for side effects."
@@ -234,17 +358,31 @@ Retrieved Chunks
     "content": "React Hooks allow functional components."
   }
 ]
-Step 12 — Build Context
+```
+
+---
+
+### Step 12 — Build Context
+
+```ts
 const context = chunks
     .map(chunk => chunk.content)
     .join("\n\n");
+```
 
-Generated Context
+**Generated Context**
 
+```
 useEffect is used for side effects.
 
 React Hooks allow functional components.
-Step 13 — Ask Gemini
+```
+
+---
+
+### Step 13 — Ask Gemini
+
+```ts
 const prompt = `
 Answer ONLY using the provided context.
 
@@ -259,9 +397,17 @@ const result = await genAI.models.generateContent({
     model: "gemini-2.5-flash",
     contents: prompt
 });
-Gemini Response
-useEffect is a React Hook used for executing side effects after rendering, such as fetching data, subscriptions, and timers.
-Complete RAG Pipeline
+```
+
+**Gemini Response**
+
+> useEffect is a React Hook used for executing side effects after rendering, such as fetching data, subscriptions, and timers.
+
+---
+
+## 🔄 Complete RAG Pipeline
+
+```
                  INDEXING PHASE (One-Time)
 
 Admin
@@ -303,5 +449,6 @@ Gemini Generates Grounded Answer
       │
       ▼
 Return Response
+```
 
-This format is much more suitable for a README because it clearly separates the Indexing Phase (building the knowledge base) from the Retrieval Phase (answering user questions), making the RAG workflow easy for reviewers or your thesis panel to understand.
+> This format clearly separates the **Indexing Phase** (building the knowledge base) from the **Retrieval Phase** (answering user questions), making the RAG workflow easy for reviewers or your thesis panel to understand.
